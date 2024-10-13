@@ -1,0 +1,214 @@
+package controllers
+
+import (
+	"fmt"
+	"net/http"
+	"sort"
+	"strconv"
+	"time"
+
+	models "github.com/nocodeleaks/quepasa/models"
+	whatsapp "github.com/nocodeleaks/quepasa/whatsapp"
+)
+
+func GetTimestamp(r *http.Request) (result int64, err error) {
+	paramTimestamp := models.GetRequestParameter(r, "timestamp")
+	if len(paramTimestamp) == 0 {
+		paramLast := models.GetRequestParameter(r, "last")
+		if len(paramLast) > 0 {
+			last, err := strconv.ParseInt(paramLast, 10, 64)
+			if err == nil {
+				request := time.Now().UTC().Add(time.Duration(-last) * time.Minute)
+				return request.Unix(), nil
+			}
+		}
+	}
+
+	result, err = StringToTimestamp(paramTimestamp)
+	return
+
+}
+
+func StringToTimestamp(timestamp string) (result int64, err error) {
+	if len(timestamp) > 0 {
+		result, err = strconv.ParseInt(timestamp, 10, 64)
+		if err != nil {
+			if len(timestamp) > 0 {
+				return
+			} else {
+				result = 0
+			}
+		}
+	}
+	return
+}
+
+/*
+<summary>
+
+	Retrieve messages with timestamp parameter
+	Sorting then, by timestamp and id, desc
+
+</summary>
+*/
+func GetOrderedMessages(server *models.QpWhatsappServer, timestamp int64) (messages []whatsapp.WhatsappMessage) {
+	searchTime := time.Unix(timestamp, 0)
+	messages = server.GetMessages(searchTime)
+	sort.Sort(sort.Reverse(whatsapp.WhatsappOrderedMessages(messages)))
+	return
+}
+
+/*
+<summary>
+
+	Find a system track identifier to follow the message
+	Getting from PATH => QUERY => HEADER
+
+</summary>
+*/
+func GetTrackId(r *http.Request) string {
+	return models.GetRequestParameter(r, "trackid")
+}
+
+/*
+<summary>
+
+	Get Picture Identifier of contact
+	Getting from PATH => QUERY => HEADER
+
+</summary>
+*/
+func GetPictureId(r *http.Request) string {
+	return models.GetRequestParameter(r, "pictureid")
+}
+
+/*
+<summary>
+
+	Get Token From Http Request
+	Getting from PATH => QUERY => HEADER
+
+</summary>
+*/
+func GetToken(r *http.Request) string {
+	return models.GetRequestParameter(r, "token")
+}
+
+/*
+<summary>
+
+	Get Master Key From Http Request
+	Getting from PATH => QUERY => HEADER
+
+</summary>
+*/
+func GetMasterKey(r *http.Request) string {
+	return models.GetRequestParameter(r, "masterkey")
+}
+
+/*
+<summary>
+
+	Get User From Http Request
+	Getting from PATH => QUERY => HEADER
+	If setted look after database, and throw errors
+	If not setted does not throw errors and returns nil pointer
+
+</summary>
+*/
+func GetUser(r *http.Request) (*models.QpUser, error) {
+	user := models.GetRequestParameter(r, "user")
+	if len(user) > 0 {
+		return models.WhatsappService.DB.Users.Find(user)
+	}
+	return nil, nil
+}
+
+/*
+<summary>
+
+	Get User From Http Request
+	Getting from PATH => QUERY => HEADER
+	If setted look after database, and throw errors
+	If not setted does not throw errors and returns string empty
+
+</summary>
+*/
+func GetUsername(r *http.Request) (string, error) {
+	user, err := GetUser(r)
+	if err != nil {
+		return "", fmt.Errorf("user not found: %s", err.Error())
+	}
+
+	if user != nil {
+		return user.Username, nil
+	}
+
+	return "", nil
+}
+
+/*
+<summary>
+
+	Get Message Id From Http Request
+	Getting from PATH => QUERY => HEADER
+
+</summary>
+*/
+func GetMessageId(r *http.Request) string {
+	messageid := models.GetRequestParameter(r, "messageid")
+	if len(messageid) == 0 {
+
+		// compatibility with V3
+		messageid = models.QueryGetValue(r.URL, "id")
+	}
+	return messageid
+}
+
+/*
+<summary>
+
+	Get File Name From Http Request
+	Getting from PATH => QUERY => HEADER
+
+</summary>
+*/
+func GetFileName(r *http.Request) string {
+	return models.GetRequestParameter(r, "filename")
+}
+
+/*
+<summary>
+
+	Get Text Label From Http Request
+	Getting from PATH => QUERY => HEADER
+
+</summary>
+*/
+func GetTextParameter(r *http.Request) string {
+	return models.GetRequestParameter(r, "text")
+}
+
+/*
+<summary>
+
+	Get a boolean indicating that cache should be used, From Http Request
+	Getting from PATH => QUERY => HEADER
+
+</summary>
+*/
+func GetCache(r *http.Request) bool {
+	return models.ToBoolean(models.GetRequestParameter(r, "cache"))
+}
+
+/*
+<summary>
+
+	Get a boolean indicating that message id should be used as a prefix, defaults true
+	Getting from PATH => QUERY => HEADER
+
+</summary>
+*/
+func GetMessageIdAsPrefix(r *http.Request) bool {
+	return models.ToBooleanWithDefault(models.GetRequestParameter(r, "messageidasprefix"), true)
+}
