@@ -1,22 +1,43 @@
 # Build stage
-FROM golang:latest as builder
+FROM golang:latest AS builder
 
 WORKDIR /build
 
-COPY /docker/docker-entrypoint.sh .
-COPY /src/ .
+# Copiar go.mod e go.sum para aproveitar o cache
+COPY ../src/go.mod ../src/go.sum ./
 
-RUN chmod 755 docker-entrypoint.sh
-RUN sed -i 's/\r//' docker-entrypoint.sh
-RUN go build -o service main.go
+# Copiar dependências locais
+COPY ../src/controllers ./controllers
+COPY ../src/library ./library
+COPY ../src/metrics ./metrics
+COPY ../src/models ./models
+COPY ../src/whatsapp ./whatsapp
+COPY ../src/whatsmeow ./whatsmeow
 
-# Run stage
-FROM golang:latest as src
+# Copiar o script de entrypoint
+COPY ../docker/docker-entrypoint.sh ./docker-entrypoint.sh
+
+# Baixar as dependências
+RUN go mod download
+
+# Copiar o restante dos arquivos do projeto
+COPY ../src/ ./src/
+
+# Construir o binário
+RUN cd src && go build -o /build/service main.go
+
+# Run stage (imagem final)
+FROM golang:latest AS final
 
 WORKDIR /opt/quepasa/
 
-COPY --from=builder /build/. /builder/
-COPY --from=builder /build/docker-entrypoint.sh /
+# Copiar o binário e o entrypoint
+COPY --from=builder /build/service /opt/quepasa/
+COPY --from=builder /build/docker-entrypoint.sh /opt/quepasa/
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
+# Ajustar permissões
+RUN chmod +x /opt/quepasa/docker-entrypoint.sh
+
+# Definir entrypoint e comando padrão
+ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["sh"]
